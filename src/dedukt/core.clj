@@ -1,4 +1,5 @@
-(ns dedukt.core)
+(ns dedukt.core
+  (:require [clojure.string :as str]))
 
 (def db
   [[11 :user/name "richhickey"]
@@ -22,22 +23,62 @@
     {:find vars
      :where wheres}))
 
+(defn variable? [v]
+  (and (symbol? v)
+       (str/starts-with? (str v) "?")))
+
 (defn match
-  "Returns the first matching fact and where clause."
-  [[e a v :as _fact] where-clauses]
-  (first
-   (filter
-    (fn [[we wa]]
-      (and (= e we)
-           (= a wa)))
-    where-clauses)))
+  "Returns the fact, if it succesfully matches to the pattern.
+   Otherwise nil."
+  [pattern fact]
+  (let [term-match? (fn [p f] (or (= '_ p) (variable? p) (= p f)))
+        matched? (reduce (fn [acc [p f]]
+                           (and acc (term-match? p f)))
+                         true
+                         (map vector pattern fact))]
+    (when matched? fact)))
+
+(defn select [find-vars pattern fact]
+  (let [pattern-to-fact (map vector pattern fact)
+        f (fn [fv]
+            (some (fn [p-f]
+                    (when (= (first p-f) fv) (second p-f))) pattern-to-fact))]
+    (mapv f find-vars)))
 
 (defn run [db q]
   (let [{:keys [find where]} (parse-query q)
-        rf (fn [acc fact]
-             (if-let [matched (match fact where)]
-               (conj acc [(nth fact 2)])
-               acc))]
-    (reduce rf #{} db)))
+        fact (some #(match (first where) %) db)
+        selected (select find (first where) fact)]
+    (set [selected])))
 
-(run db q)
+(run db [:find '?attr
+         :where [22 '?attr "tonsky"]])
+
+(run db [:find '?id
+         :where ['?id :user/name "tonsky"]])
+
+(run db [:find '?id '?name
+         :where ['?id :user/name '?name]])
+
+(comment
+
+  (def db
+    [[11 :user/name "richhickey"]
+     [22 :user/name "tonsky"]
+     [33 :user/name "pithyless"]])
+
+  [:find '?attr
+   :where [11 '?attr "tonsky"]] ;; #{[:user/name]}
+
+  [:find '?id
+   :where ['?id :user/name "tonsky"]] ;; #{[22]}
+
+  [:find '?id '?name
+   :where ['?id :user/name '?name]] ;; #{[22 "tonsky"]}
+
+  (match ['?id '_ "tonsky"] [22 :user/name "tonsky"])
+
+  (run db [:find '?id '?name
+           :where ['?id :user/name '?name]])
+
+  ())
