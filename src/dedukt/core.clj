@@ -47,9 +47,9 @@
 
 (defn run [db q]
   (let [{:keys [find where]} (parse-query q)
-        fact (some #(match (first where) %) db)
-        selected (select find (first where) fact)]
-    (set [selected])))
+        facts (filter #(match (first where) %) db)
+        values (mapv #(select find (first where) %) facts)]
+    (set values)))
 
 (run db [:find '?attr
          :where [22 '?attr "tonsky"]])
@@ -57,8 +57,14 @@
 (run db [:find '?id
          :where ['?id :user/name "tonsky"]])
 
+(run db [:find '?id
+         :where ['?id :user/name '_]])
+
 (run db [:find '?id '?name
          :where ['?id :user/name '?name]])
+
+(run db [:find '?name
+         :where ['_ '?name '_]])
 
 (comment
 
