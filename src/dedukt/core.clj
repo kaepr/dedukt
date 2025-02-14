@@ -1,10 +1,19 @@
 (ns dedukt.core
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [clojure.set :as set]))
 
 (def db
   [[11 :user/name "richhickey"]
    [22 :user/name "tonsky"]
-   [33 :user/name "pithyless"]])
+   [33 :user/name "pithyless"]
+   [11 :user/email "rich@e.com"]
+   [22 :user/email "nikita@e.com"]
+   [33 :user/email "norbert@e.com"]
+   [44 :org/name "clojure"]
+   [55 :repo/slug "clojure/clojure"]
+   [55 :repo/owner 44]
+   [66 :repo/slug "tonsky/datascript"]
+   [66 :repo/owner 22]])
 
 (def q
   [:find '?name
@@ -38,53 +47,127 @@
                          (map vector pattern fact))]
     (when matched? fact)))
 
-(defn select [find-vars pattern fact]
-  (let [pattern-to-fact (map vector pattern fact)
-        f (fn [fv]
-            (some (fn [p-f]
-                    (when (= (first p-f) fv) (second p-f))) pattern-to-fact))]
-    (mapv f find-vars)))
+(defn find-variable-facts
+  "Returns subset of fact, which are assigned as variables in the pattern."
+  [pattern fact]
+  (keep (fn [[p f]] (when (variable? p) f))
+        (map vector pattern fact)))
 
-(defn run [db q]
-  (let [{:keys [find where]} (parse-query q)
-        facts (filter #(match (first where) %) db)
-        values (mapv #(select find (first where) %) facts)]
-    (set values)))
+(defn variable->fact
+  "Return a map from variable to fact, with a given pattern and fact."
+  [pattern fact]
+  (zipmap (filter variable? pattern)
+          (find-variable-facts pattern fact)))
 
-(run db [:find '?attr
-         :where [22 '?attr "tonsky"]])
+(comment
+  (variable->fact
+   '[?id :user/name ?name]
+   '[11 :user/name "richhickey"]))
 
-(run db [:find '?id
-         :where ['?id :user/name "tonsky"]])
-
-(run db [:find '?id
-         :where ['?id :user/name '_]])
-
-(run db [:find '?id '?name
-         :where ['?id :user/name '?name]])
-
-(run db [:find '?name
-         :where ['_ '?name '_]])
+(defn all-matches
+  "Returns variable->fact mapping from all facts, with a given pattern."
+  [pattern facts]
+  (map #(variable->fact pattern %)
+       (filter #(match pattern %) facts)))
 
 (comment
 
-  (def db
-    [[11 :user/name "richhickey"]
-     [22 :user/name "tonsky"]
-     [33 :user/name "pithyless"]])
-
-  [:find '?attr
-   :where [11 '?attr "tonsky"]] ;; #{[:user/name]}
-
-  [:find '?id
-   :where ['?id :user/name "tonsky"]] ;; #{[22]}
-
-  [:find '?id '?name
-   :where ['?id :user/name '?name]] ;; #{[22 "tonsky"]}
-
-  (match ['?id '_ "tonsky"] [22 :user/name "tonsky"])
-
-  (run db [:find '?id '?name
-           :where ['?id :user/name '?name]])
+  (all-matches
+   '[?id :user/email ?email]
+   db)
 
   ())
+
+(defn merge-variable->facts
+  "Given two lists of variable->fact bindings.
+
+  Keep a variable->fact map, if the common variable b/w two maps have the same value."
+  [variable->facts-1 variable->facts-2]
+  (for [vf1 variable->facts-1
+        vf2 variable->facts-2
+        :when (every? (fn [k] (= (get vf1 k)
+                                 (get vf2 k)))
+                      (set/intersection (set (keys vf1))
+                                        (set (keys vf2))))]
+    (merge vf1 vf2)))
+
+(comment
+
+  (merge-variable->facts
+   '[{?id 11}]
+   '[{?id 11 ?email "rich@e.com"}
+     {?id 22 ?email "tonsky@e.com"}])
+
+  ())
+
+(defn process-patterns [patterns facts]
+  (let [initial-matches (all-matches (first patterns) facts)
+        result (reduce (fn [acc pattern]
+                         (merge-variable->facts acc
+                                                (all-matches pattern facts)))
+                       initial-matches
+                       (rest patterns))]
+    result))
+
+(comment
+
+  (process-patterns
+   '[[?id :user/name "richhickey"]
+     [?id :user/email ?email]]
+   db)
+
+  ())
+
+(defn select
+  [variables result]
+  (->> result
+       (map #(vals (select-keys % variables)))
+       set))
+
+(defn run [db q]
+  (let [{:keys [find where]} (parse-query q)
+        result (process-patterns where db)]
+    (->> result
+         (select find))))
+
+(run db q)
+
+(run db
+     '[:find ?email
+       :where
+       [?id :user/email ?email]
+       [?id :user/name "richhickey"]])
+
+(run db
+     '[:find ?email
+       :where
+       [?id :user/email ?email]
+       [?id :user/name "asd"]])
+
+(run db
+     '[:find ?repo
+       :where
+       [?p :user/name "tonsky"]
+       [?r :repo/owner ?p]
+       [?r :repo/slug ?repo]])
+
+(run db
+     '[:find ?name
+       :where
+       [?p :user/name ?name]
+       [?r :repo/owner ?p]
+       [?r :repo/slug "tonsky/datascript"]])
+
+(run db
+     '[:find ?name ?repo
+       :where
+       [?p :user/name ?name]
+       [?r :repo/owner ?p]
+       [?r :repo/slug ?repo]])
+
+(run db
+     '[:find ?name ?repo
+       :where
+       [?p :org/name ?name]
+       [?r :repo/owner ?p]
+       [?r :repo/slug ?repo]])
