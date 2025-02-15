@@ -121,7 +121,7 @@
 (defn select
   [variables result]
   (->> result
-       (map #(vals (select-keys % variables)))
+       (mapv #(vec (vals (select-keys % variables))))
        set))
 
 (defn run [db q]
@@ -133,10 +133,10 @@
 (run db q)
 
 (run db
-     '[:find ?email
+     '[:find ?user ?email
        :where
        [?id :user/email ?email]
-       [?id :user/name "richhickey"]])
+       [?id :user/name ?user]])
 
 (run db
      '[:find ?email

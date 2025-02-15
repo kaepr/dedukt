@@ -1,21 +1,22 @@
 # dedukt
 
-A simple in progress [datalog](https://en.wikipedia.org/wiki/Datalog) engine.
+A simple [datalog](https://en.wikipedia.org/wiki/Datalog) query engine.
 
-Based on [DOMAIN MODELING WITH DATALOG by Norbert Wojtowicz](https://www.youtube.com/watch?v=oo-7mN9WXTw).
+Based on [Domain Modeling With Datalog by Norbert Wojtowicz](https://www.youtube.com/watch?v=oo-7mN9WXTw).
 
-I made this project 
+I made this to run the examples in the above talk.
 
+It's currently very basic.
+It supports variables, joins and not much else.
+It's yet to implement rules and recursively querying on facts.
 
 ### Run Locally
 
 Make sure Clojure is installed.
 
 ``` shell
-clojure -M:repl
+clojure -M:repl # starts up a nREPL server
 ```
-
-This starts a nREPL server. 
 
 ### References
 
