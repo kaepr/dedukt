@@ -6,9 +6,11 @@ Based on [Domain Modeling With Datalog by Norbert Wojtowicz](https://www.youtube
 
 I made this to run the examples in the above talk.
 
+Blog: [Making a simple Datalog engine in Clojure](https://shagunagrawal.me/posts/making-a-simple-datalog-engine-in-clojure/)
+
 It's currently very basic.
 It supports variables, joins and not much else.
-It's yet to implement rules and recursively querying on facts.
+It does not support rules and recursively querying yet.
 
 ### Run Locally
 
